@@ -8,7 +8,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#2e8b57">
 
-    <title>Pocket Football</title>
+    <title>Pocket Football V2</title>
     <style>
         body { margin: 0; background-color: #222; overflow: hidden; font-family: sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
         canvas { display: block; margin: 0 auto; background: #2e8b57; }
@@ -24,44 +24,46 @@
         .blue { color: #55f; }
         .red { color: #f55; }
 
-        /* Aviso de Estado (Ataque/Defesa) */
+        /* Aviso */
         #status-msg {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 40px; color: yellow; font-weight: 900;
+            position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 30px; color: yellow; font-weight: 900;
             text-shadow: 0 0 10px black; opacity: 0; pointer-events: none;
-            transition: opacity 0.5s; z-index: 10;
+            transition: opacity 0.5s; z-index: 10; text-align: center;
         }
 
         /* Controles */
         #controls {
-            position: absolute; bottom: 20px; width: 100%; height: 160px;
-            pointer-events: auto; display: flex; justify-content: space-between; padding: 0 30px; box-sizing: border-box;
+            position: absolute; bottom: 10px; width: 100%; height: 160px;
+            pointer-events: auto; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box;
         }
 
-        /* D-Pad */
+        /* Joystick */
         #dpad-area {
             width: 140px; height: 140px; background: rgba(255,255,255,0.1);
             border-radius: 50%; position: relative; border: 2px solid rgba(255,255,255,0.3);
+            margin-bottom: 20px;
         }
         #dpad-stick {
-            width: 50px; height: 50px; background: rgba(255,255,255,0.5);
-            border-radius: 50%; position: absolute; top: 45px; left: 45px;
+            width: 60px; height: 60px; background: rgba(255,255,255,0.5);
+            border-radius: 50%; position: absolute; top: 40px; left: 40px;
             box-shadow: 0 0 10px black;
         }
 
-        /* Botões de Ação */
+        /* Botões */
         #actions {
-            display: flex; gap: 20px; align-items: flex-end; padding-bottom: 10px;
+            display: flex; gap: 15px; align-items: center; padding-bottom: 30px;
         }
         .btn {
-            width: 70px; height: 70px; border-radius: 50%;
-            color: white; font-weight: bold; font-size: 14px;
+            width: 80px; height: 80px; border-radius: 50%;
+            color: white; font-weight: bold; font-size: 16px;
             display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 4px 0 rgba(0,0,0,0.5); border: 2px solid white;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.5); border: 3px solid white;
+            transition: transform 0.1s;
         }
-        .btn:active { transform: translateY(4px); box-shadow: none; }
-        #btn-shoot { background: #e74c3c; } /* Vermelho - Chute/Carrinho */
-        #btn-pass { background: #3498db; }  /* Azul - Passe/Troca */
+        .btn:active { transform: scale(0.95); opacity: 0.8; }
+        #btn-shoot { background: #e74c3c; } /* Vermelho */
+        #btn-pass { background: #3498db; }  /* Azul */
 
     </style>
 </head>
@@ -71,7 +73,7 @@
         <span class="blue" id="scoreBlue">0</span> x <span class="red" id="scoreRed">0</span>
     </div>
 
-    <div id="status-msg">ATAQUE</div>
+    <div id="status-msg">VAI!</div>
 
     <canvas id="gameCanvas"></canvas>
 
@@ -92,10 +94,6 @@
         const scoreBlueEl = document.getElementById('scoreBlue');
         const scoreRedEl = document.getElementById('scoreRed');
 
-        // Botões (Labels mudam)
-        const btnPass = document.getElementById('btn-pass');
-        const btnShoot = document.getElementById('btn-shoot');
-
         let width, height;
 
         function resize() {
@@ -108,390 +106,306 @@
         resize();
 
         // --- CONSTANTES ---
-        const PLAYER_R = 15;
-        const BALL_R = 8;
+        const PLAYER_R = 18; // Jogador maior (estilo botão)
+        const BALL_R = 10;
         const GOAL_W = 120;
-        const FRICTION = 0.96;
-        const SPEED = 4;
-        const SHOOT_POWER = 12;
-        const PASS_POWER = 8;
+        const FRICTION = 0.97; // Bola desliza mais
+        const PLAYER_SPEED = 5;
+        const SHOOT_POWER = 18; // Chute mais forte
+        const PASS_POWER = 12;
 
-        // --- ESTADO DO JOGO ---
+        // --- ESTADO ---
         let scoreBlue = 0;
         let scoreRed = 0;
-        let possession = 'blue'; // Quem tem a bola (estado global)
+        let possession = 'blue';
 
         // --- OBJETOS ---
-        const ball = { x: 0, y: 0, vx: 0, vy: 0, owner: null };
+        const ball = { x: 0, y: 0, vx: 0, vy: 0 };
 
-        // Jogadores: id 0=User, 1=Teammate | 2=Enemy1, 3=EnemyGK
+        // 0=User, 1=Teammate, 2=Enemy1, 3=GK
         let players = [];
 
         function initGame() {
-            // Posição inicial (Meio campo)
             resetPositions('attack');
         }
 
         function resetPositions(mode) {
             possession = (mode === 'attack') ? 'blue' : 'red';
+            showMessage(mode === 'attack' ? "SEU ATAQUE" : "DEFENDA!");
 
-            // Labels dos botões
-            if(mode === 'attack') {
-                btnPass.innerText = "PASSE";
-                btnShoot.innerText = "CHUTE";
-                showMessage("ATAQUE");
-            } else {
-                btnPass.innerText = "SPRINT"; // Simplificado: Corre mais
-                btnShoot.innerText = "CARRINHO";
-                showMessage("DEFESA");
-            }
-
-            // Define posições baseadas no modo
             // Time Azul (User)
-            players[0] = { x: width/2, y: height/2 + 50, team: 'blue', role: 'user', slideTimer: 0 };
-            players[1] = { x: width/2 - 80, y: height/2 + 80, team: 'blue', role: 'cpu', slideTimer: 0 };
+            players[0] = { x: width/2, y: height/2 + 50, team: 'blue', role: 'user', angle: -Math.PI/2, slide: 0 };
+            players[1] = { x: width/2 - 100, y: height/2 + 50, team: 'blue', role: 'cpu', angle: -Math.PI/2, slide: 0 };
 
             // Time Vermelho (CPU)
-            players[2] = { x: width/2, y: height/2 - 50, team: 'red', role: 'cpu', slideTimer: 0 }; // Zagueiro
-            players[3] = { x: width/2, y: 30, team: 'red', role: 'gk', slideTimer: 0 }; // Goleiro
+            players[2] = { x: width/2, y: height/2 - 80, team: 'red', role: 'cpu', angle: Math.PI/2, slide: 0 };
+            players[3] = { x: width/2, y: 40, team: 'red', role: 'gk', angle: Math.PI/2, slide: 0 };
 
-            // Bola começa com quem tem a posse
             ball.vx = 0; ball.vy = 0;
             if (possession === 'blue') {
                 ball.x = players[0].x;
-                ball.y = players[0].y + 10;
-                ball.owner = players[0];
+                ball.y = players[0].y - 25;
             } else {
-                // Defesa: CPU começa atacando de cima pra baixo
-                players[2].y = 100; // CPU sobe
-                players[0].y = height - 150; // User recua
+                // Inverte para defesa
+                players[2].y = 100;
+                players[0].y = height - 100;
                 ball.x = players[2].x;
-                ball.y = players[2].y + 10;
-                ball.owner = players[2];
+                ball.y = players[2].y + 25;
             }
         }
 
         function showMessage(text) {
             statusEl.innerText = text;
             statusEl.style.opacity = 1;
-            setTimeout(() => statusEl.style.opacity = 0, 1500);
+            setTimeout(() => statusEl.style.opacity = 0, 2000);
         }
 
-        // --- INPUTS (JOYSTICK) ---
-        let joystick = { active: false, x: 0, y: 0, angle: 0, mag: 0 };
-        let keys = { pass: false, shoot: false };
+        // --- CONTROLES (REFATORADOS) ---
+        let joystick = { active: false, x: 0, y: 0, angle: 0 };
 
+        // JOYSTICK
         const dpadArea = document.getElementById('dpad-area');
         const stick = document.getElementById('dpad-stick');
 
-        // Touch Joystick
-        dpadArea.addEventListener('touchstart', startJoy, {passive: false});
-        dpadArea.addEventListener('touchmove', moveJoy, {passive: false});
-        dpadArea.addEventListener('touchend', endJoy);
+        dpadArea.addEventListener('touchstart', (e) => { e.preventDefault(); handleJoy(e.touches[0]); }, {passive: false});
+        dpadArea.addEventListener('touchmove', (e) => { e.preventDefault(); handleJoy(e.touches[0]); }, {passive: false});
+        dpadArea.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            joystick.active = false; joystick.x = 0; joystick.y = 0;
+            stick.style.transform = `translate(0px, 0px)`;
+        });
 
-        function startJoy(e) { e.preventDefault(); handleJoy(e.touches[0]); }
-        function moveJoy(e) { e.preventDefault(); handleJoy(e.touches[0]); }
         function handleJoy(touch) {
             const rect = dpadArea.getBoundingClientRect();
             const centerX = rect.left + rect.width/2;
             const centerY = rect.top + rect.height/2;
-
             let dx = touch.clientX - centerX;
             let dy = touch.clientY - centerY;
-
             const dist = Math.sqrt(dx*dx + dy*dy);
-            const maxDist = 35;
+            const maxDist = 40;
 
-            // Angulo
             joystick.angle = Math.atan2(dy, dx);
-
-            // Clamp distance
             if (dist > maxDist) {
                 dx = Math.cos(joystick.angle) * maxDist;
                 dy = Math.sin(joystick.angle) * maxDist;
             }
-
             stick.style.transform = `translate(${dx}px, ${dy}px)`;
-
             joystick.active = true;
-            joystick.x = dx / maxDist; // Normalizado -1 a 1
+            joystick.x = dx / maxDist;
             joystick.y = dy / maxDist;
-            joystick.mag = dist / maxDist;
         }
 
-        function endJoy() {
-            joystick.active = false;
-            joystick.x = 0; joystick.y = 0; joystick.mag = 0;
-            stick.style.transform = `translate(0px, 0px)`;
-        }
+        // BOTÕES DE AÇÃO (Lógica Direta)
+        function triggerAction(type) {
+            const p = players[0]; // Jogador controlado
 
-        // Botões Touch
-        const bindBtn = (el, key) => {
-            el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; });
-            el.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; });
-        };
-        bindBtn(btnPass, 'pass');
-        bindBtn(btnShoot, 'shoot');
+            // Distância da bola
+            const dx = ball.x - p.x;
+            const dy = ball.y - p.y;
+            const distBall = Math.sqrt(dx*dx + dy*dy);
+            const canKick = distBall < (PLAYER_R + BALL_R + 15); // Tolerância de chute
 
-        // --- FÍSICA E LÓGICA ---
-        function dist(o1, o2) {
-            return Math.sqrt((o1.x-o2.x)**2 + (o1.y-o2.y)**2);
-        }
-
-        function update() {
-            // 1. Mover Bola
-            if (!ball.owner) {
-                ball.x += ball.vx;
-                ball.y += ball.vy;
-                ball.vx *= FRICTION;
-                ball.vy *= FRICTION;
-
-                // Colisão bola com laterais
-                if(ball.x < BALL_R || ball.x > width - BALL_R) ball.vx *= -1;
-                if(ball.y < BALL_R || ball.y > height - BALL_R) ball.vy *= -1;
-            } else {
-                // Bola grudada no dono
-                ball.x = ball.owner.x + Math.cos(ball.owner.angle || 0) * 10;
-                ball.y = ball.owner.y + Math.sin(ball.owner.angle || 0) * 10;
-                ball.vx = 0; ball.vy = 0;
-            }
-
-            // 2. Mover Jogadores
-            players.forEach(p => {
-                // Carrinho (Slide)
-                if (p.slideTimer > 0) {
-                    p.slideTimer--;
-                    // Move rápido na direção atual
-                    p.x += Math.cos(p.angle) * SPEED * 1.5;
-                    p.y += Math.sin(p.angle) * SPEED * 1.5;
-                    return; // Não controla enquanto desliza
+            if (type === 'shoot') {
+                if (canKick) {
+                    // Chute Forte na direção que o jogador está olhando OU joystick
+                    let ang = joystick.active ? joystick.angle : p.angle;
+                    ball.vx = Math.cos(ang) * SHOOT_POWER;
+                    ball.vy = Math.sin(ang) * SHOOT_POWER;
+                    // Efeito visual
+                    createKickEffect(ball.x, ball.y);
+                } else {
+                    // Carrinho (Slide)
+                    p.slide = 15; // 15 frames deslizando
                 }
+            }
+            else if (type === 'pass') {
+                if (canKick) {
+                    // Passe para o amigo
+                    const mate = players[1];
+                    const ang = Math.atan2(mate.y - p.y, mate.x - p.x);
+                    ball.vx = Math.cos(ang) * PASS_POWER;
+                    ball.vy = Math.sin(ang) * PASS_POWER;
+                } else {
+                    // Sprint (Acelera um pouco)
+                    p.x += Math.cos(p.angle) * 20;
+                    p.y += Math.sin(p.angle) * 20;
+                }
+            }
+        }
 
+        // Listeners Robustos para Botões
+        const btnShoot = document.getElementById('btn-shoot');
+        const btnPass = document.getElementById('btn-pass');
+
+        ['touchstart', 'mousedown'].forEach(evt => {
+            btnShoot.addEventListener(evt, (e) => { e.preventDefault(); triggerAction('shoot'); });
+            btnPass.addEventListener(evt, (e) => { e.preventDefault(); triggerAction('pass'); });
+        });
+
+        // Efeito de Chute
+        let effects = [];
+        function createKickEffect(x, y) {
+            effects.push({x, y, r: 5, alpha: 1});
+        }
+
+        // --- FÍSICA ---
+        function update() {
+            // Mover Bola
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+            ball.vx *= FRICTION;
+            ball.vy *= FRICTION;
+
+            // Colisão Bola Paredes
+            if(ball.x < BALL_R || ball.x > width - BALL_R) ball.vx *= -1;
+            if(ball.y < BALL_R || ball.y > height - BALL_R) ball.vy *= -1;
+
+            // Jogadores
+            players.forEach(p => {
+                // Controle User
                 if (p.role === 'user') {
-                    // Controle do Usuário
-                    if (joystick.active) {
-                        p.x += joystick.x * SPEED;
-                        p.y += joystick.y * SPEED;
+                    if (p.slide > 0) {
+                        p.slide--;
+                        p.x += Math.cos(p.angle) * (PLAYER_SPEED * 1.5);
+                        p.y += Math.sin(p.angle) * (PLAYER_SPEED * 1.5);
+                    } else if (joystick.active) {
+                        p.x += joystick.x * PLAYER_SPEED;
+                        p.y += joystick.y * PLAYER_SPEED;
                         p.angle = joystick.angle;
                     }
-
-                    // Ações
-                    if (possession === 'blue') {
-                        // ATAQUE
-                        if (keys.shoot && ball.owner === p) {
-                            // Chute
-                            ball.owner = null;
-                            ball.vx = Math.cos(p.angle) * SHOOT_POWER;
-                            ball.vy = Math.sin(p.angle) * SHOOT_POWER;
-                            keys.shoot = false; // Reset instantâneo
-                        } else if (keys.pass && ball.owner === p) {
-                            // Passe para o teammate
-                            let mate = players[1];
-                            let angleToMate = Math.atan2(mate.y - p.y, mate.x - p.x);
-                            ball.owner = null;
-                            ball.vx = Math.cos(angleToMate) * PASS_POWER;
-                            ball.vy = Math.sin(angleToMate) * PASS_POWER;
-                            keys.pass = false;
-                        }
+                }
+                // IA Simples
+                else {
+                    let tx, ty;
+                    if (p.role === 'gk') {
+                        tx = ball.x;
+                        // Limita área
+                        if(tx < width/2 - 50) tx = width/2 - 50;
+                        if(tx > width/2 + 50) tx = width/2 + 50;
+                        ty = 40;
+                        // Sai do gol
+                        if(ball.y < 120 && ball.vy < 0) ty = ball.y - 20;
+                    } else if (p.role === 'cpu' && p.team === 'red') {
+                        // Inimigo ataca ou defende
+                        tx = ball.x; ty = ball.y;
+                        if(possession === 'red') ty = height + 50; // Gol
                     } else {
-                        // DEFESA
-                        if (keys.shoot) { // Botão Vermelho = Carrinho
-                            p.slideTimer = 20; // Frames deslizando
-                            keys.shoot = false;
-                        }
+                        // Teammate (Azul)
+                        tx = ball.x + 80; ty = ball.y - 50;
                     }
 
-                } else if (p.role === 'cpu') {
-                    // IA Simples
-                    let targetX, targetY;
-
-                    if (p.team === 'red') {
-                        // INIMIGO
-                        if (possession === 'red') {
-                             // Atacando (Tenta chegar no fundo)
-                             targetX = width/2;
-                             targetY = height + 50;
-                             // Desvia do player azul? (Simples: vai reto)
-                        } else {
-                            // Defendendo (Persegue a bola)
-                            targetX = ball.x;
-                            targetY = ball.y;
-                        }
-                    } else {
-                        // TEAMMATE (Azul)
-                        // Acompanha o ataque mas fica aberto
-                        targetX = ball.x + 60;
-                        targetY = ball.y - 40;
-                    }
-
-                    // Move IA
-                    let dx = targetX - p.x;
-                    let dy = targetY - p.y;
-                    let d = Math.sqrt(dx*dx + dy*dy);
-                    if (d > 5) {
-                        p.x += (dx/d) * (SPEED * 0.9); // IA um pouco mais lenta
-                        p.y += (dy/d) * (SPEED * 0.9);
+                    let dx = tx - p.x; let dy = ty - p.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist > 5) {
                         p.angle = Math.atan2(dy, dx);
-                    }
-                } else if (p.role === 'gk') {
-                    // GOLEIRO
-                    // Segue a bola apenas no eixo X
-                    let targetX = ball.x;
-                    if (targetX < width/2 - GOAL_W/2) targetX = width/2 - GOAL_W/2;
-                    if (targetX > width/2 + GOAL_W/2) targetX = width/2 + GOAL_W/2;
-
-                    let dx = targetX - p.x;
-                    p.x += dx * 0.1; // Lerp suave
-
-                    // Sai do gol se bola estiver muito perto
-                    if (ball.y < 100 && !ball.owner) {
-                        let dy = ball.y - p.y;
-                        p.y += dy * 0.1;
-                    } else {
-                        p.y += (30 - p.y) * 0.1; // Volta pro gol
+                        p.x += Math.cos(p.angle) * (PLAYER_SPEED * 0.8);
+                        p.y += Math.sin(p.angle) * (PLAYER_SPEED * 0.8);
                     }
                 }
 
-                // Limites do campo
+                // Limites Campo
                 if(p.x < 0) p.x = 0; if(p.x > width) p.x = width;
                 if(p.y < 0) p.y = 0; if(p.y > height) p.y = height;
 
-                // Roubada de bola / Posse
-                if (!ball.owner && dist(p, ball) < PLAYER_R + BALL_R) {
-                    // Quem pegar leva
-                    ball.owner = p;
-                    // Se a posse mudou (roubada de bola)
-                    if (possession !== p.team) {
-                        possession = p.team;
-                        // Troca instantânea de estado visual
-                        if(possession === 'blue') showMessage("ROUBOU!");
-                        else showMessage("PERDEU!");
+                // COLISÃO JOGADOR x BOLA (Física de Empurrão)
+                let dx = ball.x - p.x;
+                let dy = ball.y - p.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
 
-                        // Atualiza botões
-                        if(p.team === 'blue') {
-                            btnPass.innerText = "PASSE"; btnShoot.innerText = "CHUTE";
-                        } else {
-                            btnPass.innerText = "SPRINT"; btnShoot.innerText = "CARRINHO";
-                        }
+                if (dist < PLAYER_R + BALL_R) {
+                    // Empurra a bola
+                    let angle = Math.atan2(dy, dx);
+                    let force = 2; // Força do drible
+                    if(p.slide > 0) force = 8; // Carrinho chuta longe
+
+                    ball.vx += Math.cos(angle) * force;
+                    ball.vy += Math.sin(angle) * force;
+
+                    // Empurra o jogador um pouco pra tras (ação e reação)
+                    p.x -= Math.cos(angle) * 1;
+                    p.y -= Math.sin(angle) * 1;
+
+                    // Posse de bola visual
+                    if(possession !== p.team) {
+                        possession = p.team; // Mudou a posse
+                        // Reset simples de status se necessário
                     }
-                }
-
-                // Carrinho acerta adversário com bola
-                if (p.slideTimer > 0 && ball.owner && ball.owner.team !== p.team) {
-                     if (dist(p, ball.owner) < PLAYER_R * 2) {
-                         // TACKLE BEM SUCEDIDO
-                         let victim = ball.owner;
-                         ball.owner = null; // Bola solta
-                         // Bola espirra longe
-                         ball.vx = Math.cos(p.angle) * 10;
-                         ball.vy = Math.sin(p.angle) * 10;
-                         // Atordoa vítima? (Opcional, não implementado pra ser simples)
-                     }
                 }
             });
 
-            // 3. Checar GOL ou BOLA FORA
-            // GOL NO TOPO (Ataque Azul)
-            if (ball.y < 5 && ball.x > width/2 - GOAL_W/2 && ball.x < width/2 + GOAL_W/2) {
-                scoreBlue++;
-                scoreBlueEl.innerText = scoreBlue;
+            // GOLS
+            if (ball.y < 5 && Math.abs(ball.x - width/2) < GOAL_W/2) {
+                scoreBlue++; scoreBlueEl.innerText = scoreBlue;
                 showMessage("GOL AZUL!");
-                setTimeout(() => resetPositions('attack'), 2000); // Quem faz, ataca
-                ball.y = -100; // Tira da tela pra nao contar duplo
+                ball.y = -100; setTimeout(() => resetPositions('attack'), 2000);
             }
-            // GOL EM BAIXO (Ataque Vermelho - cruzou a linha)
-            else if (ball.y > height && ball.x > width/2 - GOAL_W/2 && ball.x < width/2 + GOAL_W/2) {
-                // Se o vermelho entrar com bola no gol de baixo
-                scoreRed++;
-                scoreRedEl.innerText = scoreRed;
+            if (ball.y > height-5 && Math.abs(ball.x - width/2) < GOAL_W/2) {
+                scoreRed++; scoreRedEl.innerText = scoreRed;
                 showMessage("GOL CPU!");
-                setTimeout(() => resetPositions('defense'), 2000);
-                ball.y = height + 100;
+                ball.y = height+100; setTimeout(() => resetPositions('defense'), 2000);
             }
-            // BOLA SAIU PELA LINHA DE FUNDO (TIRO DE META)
-            else if (ball.y < 0 || ball.y > height) {
-                // Se foi Azul atacando e errou -> Vira Defesa
-                if (possession === 'blue' && ball.y < 0) {
-                    showMessage("FORA!");
-                    setTimeout(() => resetPositions('defense'), 1500);
-                }
-                // Se foi CPU atacando e errou -> Vira Ataque
-                else if (possession === 'red' && ball.y > height) {
-                    showMessage("TIRO DE META");
-                    setTimeout(() => resetPositions('attack'), 1500);
-                }
-                ball.y = -999; ball.vx=0; ball.vy=0;
+            // Fora
+            if (ball.y < -20 || ball.y > height+20) {
+                ball.vx = 0; ball.vy = 0;
+                if(ball.y < 0) { showMessage("PRA FORA!"); setTimeout(() => resetPositions('defense'), 1500); }
+                else { showMessage("TIRO DE META"); setTimeout(() => resetPositions('attack'), 1500); }
+                ball.y = -9000; // Esconde
             }
         }
 
         function draw() {
-            // Gramado
+            // Grama
             ctx.fillStyle = "#2e8b57";
             ctx.fillRect(0, 0, width, height);
 
             // Linhas
-            ctx.strokeStyle = "rgba(255,255,255,0.5)";
-            ctx.lineWidth = 3;
+            ctx.strokeStyle = "rgba(255,255,255,0.4)";
+            ctx.lineWidth = 4;
+            ctx.strokeRect(width/2 - 80, 0, 160, 100); // Area cima
+            ctx.strokeRect(width/2 - 80, height-100, 160, 100); // Area baixo
+            ctx.beginPath(); ctx.moveTo(0, height/2); ctx.lineTo(width, height/2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(width/2, height/2, 60, 0, Math.PI*2); ctx.stroke();
 
-            // Grande área (Topo)
-            ctx.strokeRect(width/2 - 100, 0, 200, 100);
-            // Meio campo (Base)
-            ctx.beginPath();
-            ctx.moveTo(0, height/2); ctx.lineTo(width, height/2);
-            ctx.stroke();
-            // Círculo central
-            ctx.beginPath();
-            ctx.arc(width/2, height/2, 50, 0, Math.PI*2);
-            ctx.stroke();
-
-            // Gol Topo
+            // Gols
             ctx.fillStyle = "rgba(0,0,0,0.2)";
-            ctx.fillRect(width/2 - GOAL_W/2, 0, GOAL_W, 40);
-            ctx.strokeStyle = "white";
-            ctx.lineWidth = 5;
-            ctx.beginPath();
-            ctx.moveTo(width/2 - GOAL_W/2, 0); ctx.lineTo(width/2 - GOAL_W/2, 40); ctx.lineTo(width/2 + GOAL_W/2, 40); ctx.lineTo(width/2 + GOAL_W/2, 0);
-            ctx.stroke();
+            ctx.fillRect(width/2 - GOAL_W/2, 0, GOAL_W, 30);
+            ctx.fillRect(width/2 - GOAL_W/2, height-30, GOAL_W, 30);
+
+            // Efeitos
+            for(let i=effects.length-1; i>=0; i--) {
+                let e = effects[i];
+                ctx.strokeStyle = `rgba(255,255,255,${e.alpha})`;
+                ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); ctx.stroke();
+                e.r += 2; e.alpha -= 0.1;
+                if(e.alpha <= 0) effects.splice(i, 1);
+            }
 
             // Jogadores
             players.forEach(p => {
                 // Sombra
                 ctx.fillStyle = "rgba(0,0,0,0.3)";
-                ctx.beginPath(); ctx.arc(p.x+2, p.y+5, PLAYER_R, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(p.x+3, p.y+3, PLAYER_R, 0, Math.PI*2); ctx.fill();
 
-                // Corpo
-                ctx.fillStyle = (p.team === 'blue') ? "#3498db" : (p.role === 'gk' ? "#f1c40f" : "#e74c3c");
+                // Botão
+                ctx.fillStyle = (p.team === 'blue') ? "#2980b9" : (p.role==='gk'?"#f39c12":"#c0392b");
                 ctx.beginPath(); ctx.arc(p.x, p.y, PLAYER_R, 0, Math.PI*2); ctx.fill();
 
-                // Indicador (Borda branca se for User)
-                if (p.role === 'user') {
-                    ctx.strokeStyle = "white"; ctx.lineWidth = 2;
-                    ctx.beginPath(); ctx.arc(p.x, p.y, PLAYER_R, 0, Math.PI*2); ctx.stroke();
-                }
+                // Brilho do botão (Estilo plástico)
+                ctx.fillStyle = "rgba(255,255,255,0.3)";
+                ctx.beginPath(); ctx.arc(p.x-5, p.y-5, 5, 0, Math.PI*2); ctx.fill();
 
-                // Indicador de Posse
-                if (ball.owner === p) {
-                    ctx.strokeStyle = "yellow"; ctx.lineWidth = 2;
-                    ctx.beginPath(); ctx.arc(p.x, p.y, PLAYER_R + 5, 0, Math.PI*2); ctx.stroke();
+                // Indicador User
+                if (p.role === 'user') {
+                    ctx.strokeStyle = "white"; ctx.lineWidth = 3;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, PLAYER_R, 0, Math.PI*2); ctx.stroke();
                 }
             });
 
             // Bola
-            if (!ball.owner) { // Só desenha bola solta se não tiver dono (senão fica "dentro" do pé)
-                ctx.fillStyle = "rgba(0,0,0,0.3)";
-                ctx.beginPath(); ctx.arc(ball.x+2, ball.y+2, BALL_R, 0, Math.PI*2); ctx.fill();
-                ctx.fillStyle = "white";
-                ctx.beginPath(); ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI*2); ctx.fill();
-                // Detalhe bola (gomos)
-                ctx.strokeStyle = "black"; ctx.lineWidth = 1;
-                ctx.beginPath(); ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI*2); ctx.stroke();
-            } else {
-                // Desenha bola no pé do jogador
-                let bx = ball.owner.x + Math.cos(ball.owner.angle||0)*12;
-                let by = ball.owner.y + Math.sin(ball.owner.angle||0)*12;
-                ctx.fillStyle = "white";
-                ctx.beginPath(); ctx.arc(bx, by, BALL_R, 0, Math.PI*2); ctx.fill();
-            }
+            ctx.fillStyle = "white";
+            ctx.beginPath(); ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = "black"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI*2); ctx.stroke();
         }
 
         function loop() {
