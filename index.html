@@ -8,7 +8,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#2e8b57">
 
-    <title>Pocket Football V6</title>
+    <title>Pocket Football V7 (Smart CPU)</title>
     <style>
         body { margin: 0; background-color: #111; overflow: hidden; font-family: sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
         canvas { display: block; margin: 0 auto; background: #2e8b57; }
@@ -112,6 +112,7 @@
         let isScoring = false;
 
         const ball = { x: 0, y: 0, vx: 0, vy: 0 };
+        // 0:User, 1:UserGK, 2:CPU, 3:CPUGK
         let players = [];
 
         function initGame() {
@@ -202,7 +203,7 @@
             btnAction.addEventListener(evt, (e) => { e.preventDefault(); triggerAction(); })
         );
 
-        // --- FÍSICA ---
+        // --- FÍSICA E IA ---
         function update() {
             if (isScoring) return;
 
@@ -220,8 +221,9 @@
                 if(ball.y > height - BALL_R) { ball.y = height - BALL_R; ball.vy *= -0.8; }
             }
 
-            // --- MOVER JOGADORES ---
+            // --- JOGADORES ---
             players.forEach(p => {
+                // USER
                 if (p.role === 'user') {
                     if (p.slide > 0) {
                         p.slide--;
@@ -236,10 +238,32 @@
                         p.y += Math.sin(p.angle) * PLAYER_SPEED;
                     }
                 }
+                // CPU (ATAQUE E CHUTE)
                 else if (p.role === 'cpu') {
-                     let tx = ball.x; let ty = ball.y;
                      let distBall = Math.sqrt((ball.x-p.x)**2 + (ball.y-p.y)**2);
-                     if (distBall < 50) { ty = height + 50; tx = width/2; }
+                     let tx = ball.x; let ty = ball.y;
+
+                     // Lógica de Movimento
+                     if (distBall < 60) {
+                         // Tem a bola ou está perto: Vai pro gol
+                         ty = height + 50;
+                         tx = width/2;
+
+                         // --- NOVA LÓGICA DE CHUTE CPU ---
+                         // Se estiver perto da bola, olhando pro gol, e a bola estiver na frente dele
+                         let angleToGoal = Math.atan2(height - p.y, width/2 - p.x);
+                         let angleDiff = Math.abs(p.angle - angleToGoal);
+
+                         // Chuta se: Perto da bola + Alinhado com gol + Perto do ataque
+                         if (distBall < PLAYER_R + BALL_R + 15 && angleDiff < 0.8 && p.y > height/3) {
+                             // CHUTE FORTE
+                             ball.vx = Math.cos(p.angle) * (SHOOT_POWER * 0.9);
+                             ball.vy = Math.sin(p.angle) * (SHOOT_POWER * 0.9);
+                             // Recuo
+                             p.x -= Math.cos(p.angle) * 5;
+                             p.y -= Math.sin(p.angle) * 5;
+                         }
+                     }
 
                      let dx = tx - p.x; let dy = ty - p.y;
                      let ang = Math.atan2(dy, dx);
@@ -247,6 +271,7 @@
                      p.x += Math.cos(ang) * (PLAYER_SPEED * 0.9);
                      p.y += Math.sin(ang) * (PLAYER_SPEED * 0.9);
                 }
+                // GOLEIROS
                 else if (p.role === 'gk') {
                     let tx = ball.x;
                     if (tx < width/2 - 50) tx = width/2 - 50;
@@ -292,25 +317,15 @@
                 let dist = Math.sqrt(dx*dx + dy*dy);
 
                 if (dist < PLAYER_R + BALL_R) {
-
-                    // --- LÓGICA DO GOLEIRO (NOVA) ---
+                    // GOLEIRO (Espalma pro lado)
                     if (p.role === 'gk') {
-                        // Sorteia lado: -1 (Esquerda) ou 1 (Direita)
                         let side = Math.random() < 0.5 ? -1 : 1;
-
-                        // Força Lateral Forte
                         ball.vx = 8 * side;
-
-                        // Força Vertical (Sempre "pra frente" do goleiro, nunca pro gol)
-                        // Se for Azul (em baixo), joga pra cima (-Y). Se Vermelho, pra baixo (+Y)
                         let clearDirection = (p.team === 'blue') ? -1 : 1;
                         ball.vy = 6 * clearDirection;
-
-                        // Pequeno recuo visual do goleiro
                         p.y -= 2 * clearDirection;
-
                     } else {
-                        // --- LÓGICA JOGADORES DE LINHA ---
+                        // LINHA (Empurra/Conduz)
                         let ang = Math.atan2(dy, dx);
                         let force = 3;
                         if (p.role === 'user' && p.slide > 0) force = 8;
@@ -336,12 +351,12 @@
                 scoreBlue++;
                 scoreBlueEl.innerText = scoreBlue;
                 showMessage("GOL AZUL!");
-                setTimeout(() => resetPositions('red'), 2000); // Quem tomou sai
+                setTimeout(() => resetPositions('red'), 2000);
             } else {
                 scoreRed++;
                 scoreRedEl.innerText = scoreRed;
                 showMessage("GOL CPU!");
-                setTimeout(() => resetPositions('blue'), 2000); // Quem tomou sai
+                setTimeout(() => resetPositions('blue'), 2000);
             }
             ball.x = -999; ball.vx = 0; ball.vy = 0;
         }
@@ -358,7 +373,6 @@
             ctx.strokeRect(width/2 - 80, height-100, 160, 100);
             ctx.beginPath(); ctx.moveTo(0, height/2); ctx.lineTo(width, height/2); ctx.stroke();
             ctx.beginPath(); ctx.arc(width/2, height/2, 60, 0, Math.PI*2); ctx.stroke();
-            // Paredes
             ctx.strokeStyle = "#1e5b37"; ctx.lineWidth = 10; ctx.strokeRect(0,0,width,height);
 
             // Jogadores
