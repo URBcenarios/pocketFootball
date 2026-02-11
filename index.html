@@ -8,61 +8,61 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#2e8b57">
 
-    <title>Pocket Football V3</title>
+    <title>Pocket Football V4</title>
     <style>
-        body { margin: 0; background-color: #222; overflow: hidden; font-family: sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
+        body { margin: 0; background-color: #111; overflow: hidden; font-family: sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
         canvas { display: block; margin: 0 auto; background: #2e8b57; }
 
         /* Placar */
         #hud {
-            position: absolute; top: 10px; left: 0; width: 100%;
-            display: flex; justify-content: center; gap: 30px;
-            color: white; font-weight: 900; font-size: 28px;
-            text-shadow: 2px 2px 0px black; pointer-events: none; z-index: 5;
+            position: absolute; top: 15px; left: 0; width: 100%;
+            display: flex; justify-content: center; gap: 40px;
+            color: white; font-weight: 900; font-size: 32px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8); pointer-events: none; z-index: 5;
         }
-        .blue { color: #3498db; }
-        .red { color: #e74c3c; }
+        .blue { color: #5dade2; }
+        .red { color: #ec7063; }
 
-        /* Mensagens de Gol/Falta */
+        /* Mensagens */
         #status-msg {
             position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 40px; color: yellow; font-weight: 900;
-            text-shadow: 0 0 15px black; opacity: 0; pointer-events: none;
-            transition: opacity 0.3s; text-align: center; white-space: nowrap;
+            font-size: 40px; color: #f1c40f; font-weight: 900;
+            text-shadow: 0 0 10px black; opacity: 0; pointer-events: none;
+            transition: opacity 0.2s; text-align: center; white-space: nowrap; z-index: 10;
         }
 
         /* Área de Controles */
         #controls {
             position: absolute; bottom: 20px; width: 100%; height: 180px;
             pointer-events: auto; display: flex; justify-content: space-between; align-items: center;
-            padding: 0 40px; box-sizing: border-box;
+            padding: 0 30px; box-sizing: border-box;
         }
 
-        /* Joystick (Esquerda) */
+        /* Joystick */
         #dpad-area {
-            width: 140px; height: 140px; background: rgba(255,255,255,0.1);
-            border-radius: 50%; position: relative; border: 2px solid rgba(255,255,255,0.2);
+            width: 130px; height: 130px; background: rgba(255,255,255,0.05);
+            border-radius: 50%; position: relative; border: 2px solid rgba(255,255,255,0.1);
         }
         #dpad-stick {
-            width: 60px; height: 60px; background: rgba(255,255,255,0.4);
+            width: 50px; height: 50px; background: rgba(255,255,255,0.3);
             border-radius: 50%; position: absolute; top: 40px; left: 40px;
             box-shadow: 0 0 10px rgba(0,0,0,0.5);
-            transition: transform 0.05s; /* Suaviza visualmente */
+            transition: transform 0.05s;
         }
 
-        /* Botão de Ação (Direita) */
+        /* Botão Transparente */
         #btn-action {
-            width: 110px; height: 110px; border-radius: 50%;
-            background: radial-gradient(circle at 30% 30%, #ff6b6b, #c0392b);
-            border: 4px solid white;
-            color: white; font-weight: 900; font-size: 20px;
+            width: 100px; height: 100px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05); /* Quase invisível */
+            border: 4px solid rgba(255, 255, 255, 0.4);
+            color: rgba(255, 255, 255, 0.7); font-weight: 900; font-size: 18px;
             display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 6px 0 #7f1d1d, 0 10px 10px rgba(0,0,0,0.4);
-            transform: translateY(0); transition: all 0.1s;
+            backdrop-filter: blur(2px);
+            transition: transform 0.1s;
         }
         #btn-action:active {
-            transform: translateY(6px);
-            box-shadow: 0 0 0 #7f1d1d, 0 0 5px rgba(0,0,0,0.4);
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(0.95);
         }
 
     </style>
@@ -71,7 +71,7 @@
 
     <div id="hud">
         <span class="blue" id="scoreBlue">0</span>
-        <span>x</span>
+        <span style="font-size: 20px; opacity: 0.7; margin-top: 8px;">VS</span>
         <span class="red" id="scoreRed">0</span>
     </div>
 
@@ -105,68 +105,60 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // --- CONFIGURAÇÕES DE JOGO ---
-        const PLAYER_R = 20;    // Tamanho do Jogador
-        const BALL_R = 10;      // Tamanho da Bola
-        const GOAL_W = 140;     // Largura do Gol
-        const FRICTION = 0.97;  // Bola para devagar
-        const PLAYER_SPEED = 3.5; // VELOCIDADE REDUZIDA (Era 5)
-        const SHOOT_POWER = 18; // Força do chute
+        // --- CONFIGURAÇÕES ---
+        const PLAYER_R = 18;
+        const BALL_R = 9;
+        const GOAL_W = 120;
+        const FRICTION = 0.98; // Bola desliza bastante (Tabela)
+        const PLAYER_SPEED = 3.2; // Velocidade reduzida para controle preciso
+        const SHOOT_POWER = 16;
 
         // --- ESTADO ---
         let scoreBlue = 0;
         let scoreRed = 0;
-        let possession = 'blue';
+        let isScoring = false; // Trava para não contar gol duplo
 
         const ball = { x: 0, y: 0, vx: 0, vy: 0 };
-
-        // 0: User (Linha), 1: User GK, 2: CPU (Linha), 3: CPU GK
+        // 0:User, 1:UserGK, 2:CPU, 3:CPUGK
         let players = [];
 
         function initGame() {
-            resetPositions('blue'); // Azul começa
+            resetPositions('blue');
         }
 
         function resetPositions(teamStart) {
-            possession = teamStart;
+            isScoring = false;
             showMessage(teamStart === 'blue' ? "SEU ATAQUE" : "DEFENDA!");
 
-            // -- TIME AZUL (VOCÊ) --
-            // Jogador de Linha (Você)
-            players[0] = { x: width/2, y: height/2 + 80, team: 'blue', role: 'user', angle: -Math.PI/2, slide: 0 };
-            // Goleiro Azul
-            players[1] = { x: width/2, y: height - 60, team: 'blue', role: 'gk', angle: -Math.PI/2, slide: 0 };
+            // User (Azul)
+            players[0] = { x: width/2, y: height/2 + 50, team: 'blue', role: 'user', angle: -Math.PI/2, slide: 0 };
+            players[1] = { x: width/2, y: height - 50, team: 'blue', role: 'gk', angle: -Math.PI/2, slide: 0 };
 
-            // -- TIME VERMELHO (CPU) --
-            // Jogador de Linha (CPU)
-            players[2] = { x: width/2, y: height/2 - 80, team: 'red', role: 'cpu', angle: Math.PI/2, slide: 0 };
-            // Goleiro Vermelho
-            players[3] = { x: width/2, y: 60, team: 'red', role: 'gk', angle: Math.PI/2, slide: 0 };
+            // CPU (Vermelho)
+            players[2] = { x: width/2, y: height/2 - 50, team: 'red', role: 'cpu', angle: Math.PI/2, slide: 0 };
+            players[3] = { x: width/2, y: 50, team: 'red', role: 'gk', angle: Math.PI/2, slide: 0 };
 
-            // Bola no meio
             ball.vx = 0; ball.vy = 0;
             if (teamStart === 'blue') {
-                ball.x = players[0].x; ball.y = players[0].y - 30;
+                ball.x = players[0].x; ball.y = players[0].y - 25;
             } else {
-                ball.x = players[2].x; ball.y = players[2].y + 30;
-                // Ajuste para CPU atacar
-                players[2].y = height/2 - 50;
-                players[0].y = height - 150;
+                ball.x = players[2].x; ball.y = players[2].y + 25;
+                players[2].y = height/2 - 30; // CPU avança
+                players[0].y = height - 120; // User recua
             }
         }
 
         function showMessage(text) {
             statusEl.innerText = text;
             statusEl.style.opacity = 1;
-            setTimeout(() => statusEl.style.opacity = 0, 2000);
+            setTimeout(() => statusEl.style.opacity = 0, 1500);
         }
 
-        // --- CONTROLES ---
-        let joystick = { active: false, x: 0, y: 0, angle: 0 };
+        // --- CONTROLES (JOYSTICK) ---
+        let joystick = { active: false, x: 0, y: 0, angle: -Math.PI/2 };
         const dpadArea = document.getElementById('dpad-area');
         const stick = document.getElementById('dpad-stick');
 
-        // Joystick Logic
         function handleJoy(touch) {
             const rect = dpadArea.getBoundingClientRect();
             const centerX = rect.left + rect.width/2;
@@ -176,15 +168,25 @@
             const dist = Math.sqrt(dx*dx + dy*dy);
             const maxDist = 40;
 
-            joystick.angle = Math.atan2(dy, dx);
+            // Angulo puro
+            let rawAngle = Math.atan2(dy, dx);
+
             if (dist > maxDist) {
-                dx = Math.cos(joystick.angle) * maxDist;
-                dy = Math.sin(joystick.angle) * maxDist;
+                dx = Math.cos(rawAngle) * maxDist;
+                dy = Math.sin(rawAngle) * maxDist;
             }
+
             stick.style.transform = `translate(${dx}px, ${dy}px)`;
-            joystick.active = true;
-            joystick.x = dx / maxDist;
-            joystick.y = dy / maxDist;
+
+            // Deadzone (Zona morta) para não mexer com toques acidentais
+            if (dist > 5) {
+                joystick.active = true;
+                joystick.angle = rawAngle;
+                joystick.x = dx / maxDist;
+                joystick.y = dy / maxDist;
+            } else {
+                joystick.active = false;
+            }
         }
 
         dpadArea.addEventListener('touchstart', (e) => { e.preventDefault(); handleJoy(e.touches[0]); }, {passive: false});
@@ -195,228 +197,199 @@
             stick.style.transform = `translate(0px, 0px)`;
         });
 
-        // Botão de Ação Único
+        // Botão de Ação
         function triggerAction() {
-            const p = players[0]; // Você
-
-            // Verifica distância da bola
-            const dx = ball.x - p.x;
-            const dy = ball.y - p.y;
+            const p = players[0];
+            const dx = ball.x - p.x; const dy = ball.y - p.y;
             const dist = Math.sqrt(dx*dx + dy*dy);
 
-            // Se estiver perto (raio do jogador + bola + margem), CHUTA
+            // Chute se perto, Carrinho se longe
             if (dist < PLAYER_R + BALL_R + 25) {
-                // Direção do chute: Joystick ou Frente do jogador
                 let ang = joystick.active ? joystick.angle : p.angle;
-
-                // Força do chute
                 ball.vx = Math.cos(ang) * SHOOT_POWER;
                 ball.vy = Math.sin(ang) * SHOOT_POWER;
-
-                // Feedback visual (tremor leve)
-                btnAction.innerText = "BUM!";
-                setTimeout(() => btnAction.innerText = "CHUTE", 500);
+                btnAction.style.transform = "scale(1.1)"; // Feedback visual
+                setTimeout(()=>btnAction.style.transform = "scale(1)", 100);
             } else {
-                // Se estiver longe, CARRINHO (Dash)
-                p.slide = 20; // 20 frames deslizando rápido
+                p.slide = 20; // Slide
             }
         }
+        ['touchstart', 'mousedown'].forEach(evt =>
+            btnAction.addEventListener(evt, (e) => { e.preventDefault(); triggerAction(); })
+        );
 
-        btnAction.addEventListener('touchstart', (e) => { e.preventDefault(); triggerAction(); });
-        btnAction.addEventListener('mousedown', (e) => { e.preventDefault(); triggerAction(); });
-
-        // --- LOOP PRINCIPAL ---
+        // --- FÍSICA ---
         function update() {
-            // Bola Física
+            if (isScoring) return; // Pausa no gol
+
+            // Bola
             ball.x += ball.vx;
             ball.y += ball.vy;
             ball.vx *= FRICTION;
             ball.vy *= FRICTION;
 
-            // Bola Paredes
-            if(ball.x < BALL_R || ball.x > width - BALL_R) ball.vx *= -1;
-            if(ball.y < BALL_R || ball.y > height - BALL_R) ball.vy *= -1;
+            // PAREDES (TABELA) - Bola nunca sai
+            // Eixo X
+            if(ball.x < BALL_R) { ball.x = BALL_R; ball.vx *= -0.8; }
+            if(ball.x > width - BALL_R) { ball.x = width - BALL_R; ball.vx *= -0.8; }
 
-            // Atualiza Jogadores
+            // Eixo Y (Apenas se NÃO for gol)
+            let inGoalRange = (ball.x > width/2 - GOAL_W/2 && ball.x < width/2 + GOAL_W/2);
+
+            if (!inGoalRange) {
+                if(ball.y < BALL_R) { ball.y = BALL_R; ball.vy *= -0.8; } // Teto
+                if(ball.y > height - BALL_R) { ball.y = height - BALL_R; ball.vy *= -0.8; } // Chão
+            }
+
+            // Jogadores
             players.forEach(p => {
-                // --- MOVIMENTO USER ---
+                // USER
                 if (p.role === 'user') {
                     if (p.slide > 0) {
-                        // Carrinho: Vai muito rápido na direção atual
                         p.slide--;
-                        p.x += Math.cos(p.angle) * (PLAYER_SPEED * 2.5);
-                        p.y += Math.sin(p.angle) * (PLAYER_SPEED * 2.5);
+                        p.x += Math.cos(p.angle) * (PLAYER_SPEED * 2.2);
+                        p.y += Math.sin(p.angle) * (PLAYER_SPEED * 2.2);
                     } else if (joystick.active) {
-                        // Movimento Normal: Mais suave
-                        p.x += joystick.x * PLAYER_SPEED;
-                        p.y += joystick.y * PLAYER_SPEED;
-                        p.angle = joystick.angle;
+                        // SUAVIZAÇÃO DE ROTAÇÃO (Turn Rate)
+                        // Em vez de p.angle = joystick.angle direto, usamos Lerp (Interpolação)
+                        // Isso faz o jogador girar, não "teletransportar" a rotação
+                        let diff = joystick.angle - p.angle;
+                        // Ajuste para o ângulo ir pelo caminho mais curto
+                        while (diff < -Math.PI) diff += Math.PI * 2;
+                        while (diff > Math.PI) diff -= Math.PI * 2;
+                        p.angle += diff * 0.15; // 0.15 = Velocidade de giro (menor = mais pesado)
+
+                        p.x += Math.cos(p.angle) * PLAYER_SPEED;
+                        p.y += Math.sin(p.angle) * PLAYER_SPEED;
                     }
                 }
-                // --- IA DO GOLEIRO (AMBOS) ---
-                else if (p.role === 'gk') {
-                    // Segue a bola no eixo X
-                    let targetX = ball.x;
-                    // Trava na pequena área
-                    if (targetX < width/2 - 60) targetX = width/2 - 60;
-                    if (targetX > width/2 + 60) targetX = width/2 + 60;
-
-                    // Suavização do movimento (Lerp)
-                    p.x += (targetX - p.x) * 0.08;
-
-                    // Sai um pouco do gol se a bola vier
-                    let baseLine = (p.team === 'blue') ? height - 60 : 60;
-                    let dangerDist = 150;
-
-                    if (Math.abs(ball.y - baseLine) < dangerDist && Math.abs(ball.x - width/2) < 100) {
-                        // Avança pra fechar angulo
-                        let advance = (p.team === 'blue') ? -30 : 30;
-                        p.y += ( (baseLine + advance) - p.y ) * 0.05;
-                    } else {
-                        // Volta pra linha
-                        p.y += (baseLine - p.y) * 0.05;
-                    }
-                }
-                // --- IA DO INIMIGO (CPU LINHA) ---
+                // IA (CPU)
                 else if (p.role === 'cpu') {
-                    // Lógica de ataque e defesa
-                    let tx, ty;
+                     // Lógica simples: Vai pra bola ou pro gol
+                     let tx = ball.x; let ty = ball.y;
+                     // Se tiver a bola, mira no gol
+                     let distBall = Math.sqrt((ball.x-p.x)**2 + (ball.y-p.y)**2);
+                     if (distBall < 40) { ty = height + 50; tx = width/2; }
 
-                    // CPU tem a posse? (Bola perto dele)
-                    let distBall = Math.sqrt((ball.x - p.x)**2 + (ball.y - p.y)**2);
-                    let hasBall = distBall < 40;
-
-                    if (hasBall) {
-                        // ATACAR: Vai em direção ao gol de baixo
-                        tx = width/2;
-                        ty = height;
-
-                        // Se estiver perto e alinhado, CHUTA!
-                        if (p.y > height/2 && Math.abs(p.x - width/2) < 100) {
-                            if (Math.random() < 0.05) { // 5% de chance por frame de chutar
-                                let ang = Math.atan2(height - p.y, width/2 - p.x);
-                                ball.vx = Math.cos(ang) * SHOOT_POWER;
-                                ball.vy = Math.sin(ang) * SHOOT_POWER;
-                            }
-                        }
+                     let dx = tx - p.x; let dy = ty - p.y;
+                     let ang = Math.atan2(dy, dx);
+                     p.angle = ang;
+                     p.x += Math.cos(ang) * (PLAYER_SPEED * 0.9);
+                     p.y += Math.sin(ang) * (PLAYER_SPEED * 0.9);
+                }
+                // GOLEIROS
+                else if (p.role === 'gk') {
+                    let tx = ball.x;
+                    // Limita área
+                    if (tx < width/2 - 50) tx = width/2 - 50;
+                    if (tx > width/2 + 50) tx = width/2 + 50;
+                    p.x += (tx - p.x) * 0.08;
+                    // Sai um pouco
+                    let baseLine = (p.team==='blue')? height-40 : 40;
+                    if (Math.abs(ball.y - baseLine) < 150) {
+                         p.y += ((baseLine + (p.team==='blue'?-30:30)) - p.y) * 0.05;
                     } else {
-                        // DEFENDER: Persegue a bola
-                        tx = ball.x;
-                        ty = ball.y;
+                         p.y += (baseLine - p.y) * 0.05;
                     }
-
-                    // Move a CPU
-                    let dx = tx - p.x; let dy = ty - p.y;
-                    let angle = Math.atan2(dy, dx);
-                    p.angle = angle;
-                    p.x += Math.cos(angle) * (PLAYER_SPEED * 0.9); // CPU um pouco mais lento que user
-                    p.y += Math.sin(angle) * (PLAYER_SPEED * 0.9);
                 }
 
-                // --- COLISÃO JOGADOR x BOLA ---
-                let dx = ball.x - p.x;
-                let dy = ball.y - p.y;
+                // Limites Player
+                if(p.x < 10) p.x = 10; if(p.x > width-10) p.x = width-10;
+                if(p.y < 10) p.y = 10; if(p.y > height-10) p.y = height-10;
+
+                // Colisão Bola
+                let dx = ball.x - p.x; let dy = ball.y - p.y;
                 let dist = Math.sqrt(dx*dx + dy*dy);
-
                 if (dist < PLAYER_R + BALL_R) {
-                    // Física de empurrão (Bola não gruda)
-                    let angle = Math.atan2(dy, dx);
+                    let ang = Math.atan2(dy, dx);
                     let force = 3;
-
-                    // Se for carrinho, chuta forte
-                    if (p.role === 'user' && p.slide > 0) force = 10;
-                    // Goleiro rebate forte
-                    if (p.role === 'gk') force = 8;
-
-                    ball.vx += Math.cos(angle) * force;
-                    ball.vy += Math.sin(angle) * force;
-
-                    // Empurra jogador pra trás (feedback físico)
-                    p.x -= Math.cos(angle) * 2;
-                    p.y -= Math.sin(angle) * 2;
+                    if (p.role === 'user' && p.slide > 0) force = 8;
+                    ball.vx += Math.cos(ang) * force;
+                    ball.vy += Math.sin(ang) * force;
+                    p.x -= Math.cos(ang)*2; p.y -= Math.sin(ang)*2;
                 }
-
-                // Limites do Campo
-                if(p.x < 0) p.x = 0; if(p.x > width) p.x = width;
-                if(p.y < 0) p.y = 0; if(p.y > height) p.y = height;
             });
 
-            // --- GOLS ---
-            // Gol Azul (Topo)
-            if (ball.y < 0 && Math.abs(ball.x - width/2) < GOAL_W/2) {
-                scoreBlue++; scoreBlueEl.innerText = scoreBlue;
-                showMessage("GOL AZUL!");
-                ball.y = -1000; setTimeout(() => resetPositions('blue'), 2000); // Quem faz, ataca
+            // GOLS (Lógica Estrita)
+            // Gol no topo (Azul marca)
+            if (ball.y < -BALL_R && inGoalRange && !isScoring) {
+                handleGoal('blue');
             }
-            // Gol Vermelho (Baixo)
-            if (ball.y > height && Math.abs(ball.x - width/2) < GOAL_W/2) {
-                scoreRed++; scoreRedEl.innerText = scoreRed;
-                showMessage("GOL CPU!");
-                ball.y = 1000; setTimeout(() => resetPositions('red'), 2000);
-            }
-
-            // Bola Fora (Laterais do fundo)
-            if (ball.y < -20 || ball.y > height + 20) {
-                if (ball.y < 0) { // Saiu no fundo do ataque azul
-                    showMessage("TIRO DE META"); setTimeout(() => resetPositions('red'), 1500);
-                } else { // Saiu no fundo da defesa azul
-                    showMessage("ESCANTEIO (CPU)"); setTimeout(() => resetPositions('red'), 1500);
-                }
-                ball.y = -5000; ball.vx = 0; ball.vy = 0;
+            // Gol embaixo (Vermelho marca)
+            else if (ball.y > height + BALL_R && inGoalRange && !isScoring) {
+                handleGoal('red');
             }
         }
 
+        function handleGoal(team) {
+            isScoring = true; // Trava placar
+            if (team === 'blue') {
+                scoreBlue++;
+                scoreBlueEl.innerText = scoreBlue;
+                showMessage("GOL AZUL!");
+                // Quem fez gol continua atacando
+                setTimeout(() => resetPositions('blue'), 2000);
+            } else {
+                scoreRed++;
+                scoreRedEl.innerText = scoreRed;
+                showMessage("GOL CPU!");
+                // Quem fez gol continua atacando
+                setTimeout(() => resetPositions('red'), 2000);
+            }
+            // Esconde bola pra evitar contagem dupla
+            ball.x = -999;
+            ball.vx = 0; ball.vy = 0;
+        }
+
         function draw() {
-            // Gramado
+            // Grama
             ctx.fillStyle = "#2e8b57";
             ctx.fillRect(0, 0, width, height);
 
             // Linhas
-            ctx.strokeStyle = "rgba(255,255,255,0.4)";
+            ctx.strokeStyle = "rgba(255,255,255,0.3)";
             ctx.lineWidth = 4;
-            // Grande área (Cima e Baixo)
-            ctx.strokeRect(width/2 - 100, 0, 200, 120);
-            ctx.strokeRect(width/2 - 100, height-120, 200, 120);
-            // Meio Campo
+            ctx.strokeRect(width/2 - 80, 0, 160, 100);
+            ctx.strokeRect(width/2 - 80, height-100, 160, 100);
             ctx.beginPath(); ctx.moveTo(0, height/2); ctx.lineTo(width, height/2); ctx.stroke();
             ctx.beginPath(); ctx.arc(width/2, height/2, 60, 0, Math.PI*2); ctx.stroke();
 
-            // Gols (Redes)
-            ctx.fillStyle = "rgba(0,0,0,0.3)";
-            ctx.fillRect(width/2 - GOAL_W/2, 0, GOAL_W, 20); // Gol CPU
-            ctx.fillRect(width/2 - GOAL_W/2, height-20, GOAL_W, 20); // Gol User
+            // Paredes (Visual)
+            ctx.strokeStyle = "#1e5b37";
+            ctx.lineWidth = 10;
+            ctx.strokeRect(0,0,width,height);
 
             // Jogadores
             players.forEach(p => {
                 // Sombra
-                ctx.fillStyle = "rgba(0,0,0,0.3)";
-                ctx.beginPath(); ctx.arc(p.x+4, p.y+4, PLAYER_R, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = "rgba(0,0,0,0.2)";
+                ctx.beginPath(); ctx.arc(p.x+3, p.y+3, PLAYER_R, 0, Math.PI*2); ctx.fill();
 
-                // Cor do time
-                let color = (p.team === 'blue') ? "#3498db" : "#e74c3c";
-                if (p.role === 'gk') color = "#f1c40f"; // Goleiros Amarelos
-
-                ctx.fillStyle = color;
+                // Base
+                ctx.fillStyle = (p.team === 'blue') ? "#5dade2" : "#ec7063";
+                if(p.role.includes('gk')) ctx.fillStyle = "#f4d03f";
                 ctx.beginPath(); ctx.arc(p.x, p.y, PLAYER_R, 0, Math.PI*2); ctx.fill();
 
-                // Detalhe (Borda para User)
-                if (p.role === 'user') {
-                    ctx.strokeStyle = "white"; ctx.lineWidth = 4;
-                    ctx.beginPath(); ctx.arc(p.x, p.y, PLAYER_R, 0, Math.PI*2); ctx.stroke();
-
-                    // Seta de direção (só pro user)
+                // Detalhe Direção
+                if (p.role === 'user' || p.role === 'cpu') {
+                    ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 3;
                     ctx.beginPath();
                     ctx.moveTo(p.x, p.y);
-                    ctx.lineTo(p.x + Math.cos(p.angle)*30, p.y + Math.sin(p.angle)*30);
-                    ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 2;
+                    ctx.lineTo(p.x + Math.cos(p.angle)*PLAYER_R, p.y + Math.sin(p.angle)*PLAYER_R);
                     ctx.stroke();
+                }
+
+                // Borda User
+                if (p.role === 'user') {
+                    ctx.strokeStyle = "white"; ctx.lineWidth = 3;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, PLAYER_R, 0, Math.PI*2); ctx.stroke();
                 }
             });
 
             // Bola
             ctx.fillStyle = "white";
             ctx.beginPath(); ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI*2); ctx.fill();
-            ctx.strokeStyle = "black"; ctx.lineWidth = 2;
+            ctx.strokeStyle = "#333"; ctx.lineWidth = 2;
             ctx.beginPath(); ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI*2); ctx.stroke();
         }
 
